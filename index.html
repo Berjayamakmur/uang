@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f5f7fb">
+  <title>RuangUang — Keuangan Pribadi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.8/babel.min.js"></script>
+  <style>
+    :root{--ink:#17211f;--muted:#82908b;--line:#e9eeeb;--green:#167c65;--green-dark:#105f50;--mint:#eaf5f0;--paper:#f5f7f5}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--paper);color:var(--ink);font-family:Inter,sans-serif;-webkit-font-smoothing:antialiased}
+    button,input,select,textarea{font:inherit}
+    button{cursor:pointer}
+    .outfit{font-family:Outfit,sans-serif}
+    .material-symbols-outlined{font-size:20px;line-height:1;font-variation-settings:'FILL' 0,'wght' 450,'GRAD' 0,'opsz' 24;vertical-align:middle}
+    .app-shell{min-height:100vh}
+    .sidebar{width:248px;background:#fff;border-right:1px solid #edf0ee;position:fixed;inset:0 auto 0 0;z-index:30;display:flex;flex-direction:column;padding:26px 17px 18px}
+    .main-area{margin-left:248px;min-height:100vh}
+    .nav-item{display:flex;align-items:center;gap:13px;width:100%;padding:11px 13px;border:0;border-radius:12px;background:transparent;color:#76827d;text-align:left;font-weight:500;font-size:13px;transition:.18s}
+    .nav-item:hover{background:#f4f7f5;color:#23332e}
+    .nav-item.active{color:#126c58;background:#eaf5f0;font-weight:650}
+    .card{background:#fff;border:1px solid #edf0ee;border-radius:18px;box-shadow:0 3px 12px rgba(27,48,39,.025)}
+    .metric-card{padding:21px 22px;min-height:148px;position:relative;overflow:hidden}
+    .metric-card:after{content:"";position:absolute;width:108px;height:108px;border-radius:50%;right:-46px;top:-42px;background:var(--orb,#eef7f2);opacity:.8}
+    .pill{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:7px 11px;font-size:11px;font-weight:650}
+    .btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:9px;border:0;border-radius:12px;background:var(--green);color:#fff;padding:11px 16px;font-size:13px;font-weight:650;box-shadow:0 5px 12px rgba(22,124,101,.16);transition:.2s}
+    .btn-primary:hover{background:var(--green-dark);transform:translateY(-1px)}
+    .btn-secondary{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #e5ebe7;border-radius:11px;background:#fff;color:#44534d;padding:10px 13px;font-size:12px;font-weight:600;transition:.18s}
+    .btn-secondary:hover{background:#f7f9f8;border-color:#d9e3dd}
+    .input{width:100%;border:1px solid #e4eae6;background:#fff;border-radius:11px;padding:11px 12px;color:#26352f;outline:none;font-size:13px;transition:.2s}
+    .input:focus{border-color:#77bba4;box-shadow:0 0 0 3px rgba(22,124,101,.09)}
+    .input::placeholder{color:#a7b0ac}
+    .label{display:block;color:#52615b;font-size:12px;font-weight:600;margin-bottom:7px}
+    .toast{animation:toast-in .24s ease-out}
+    @keyframes toast-in{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
+    .fade-up{animation:fade-up .35s ease both}
+    @keyframes fade-up{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+    .spinner-dark{border-color:#dbe6e0;border-top-color:#167c65}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .hero-gradient{background:radial-gradient(ellipse at 85% 0%,rgba(90,174,141,.24),transparent 38%),linear-gradient(125deg,#123a32 0%,#145d4c 58%,#16735d 100%)}
+    .mobile-overlay{background:rgba(10,25,19,.34);backdrop-filter:blur(3px)}
+    .chart-tooltip{filter:drop-shadow(0 4px 10px rgba(10,30,20,.15))}
+    @media(max-width:1023px){.sidebar{transform:translateX(-100%);transition:transform .25s ease}.sidebar.open{transform:translateX(0)}.main-area{margin-left:0}}
+    @media(max-width:640px){.metric-card{padding:17px;min-height:132px}.card{border-radius:16px}.mobile-pad{padding-left:17px!important;padding-right:17px!important}}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    let sessionToken = localStorage.getItem('ruanguang_session') || '';
+    const serverCall = (method, ...args) => new Promise((resolve, reject) => {
+      const isAuthCall = method === 'loginUser' || method === 'registerUser';
+      const callArgs = isAuthCall ? args : [sessionToken, ...args];
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[method](...callArgs);
+        return;
+      }
+      const endpoint = localStorage.getItem('ruanguang_api_url') || '';
+      if (!endpoint) {
+        reject(new Error('Masukkan alamat layanan Apps Script terlebih dahulu.'));
+        return;
+      }
+      const callback = 'ruanguangJsonp_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      const script = document.createElement('script');
+      const params = new URLSearchParams({
+        api: '1',
+        method: method,
+        args: JSON.stringify(callArgs),
+        callback: callback
+      });
+      const separator = endpoint.indexOf('?') === -1 ? '?' : '&';
+      let timer;
+      const cleanup = () => {
+        if (timer) clearTimeout(timer);
+        delete window[callback];
+        script.remove();
+      };
+      window[callback] = result => {
+        cleanup();
+        resolve(result);
+      };
+      script.onerror = () => {
+        cleanup();
+        reject(new Error('Layanan Apps Script tidak dapat dihubungi. Periksa alamat dan publikasinya.'));
+      };
+      timer = setTimeout(() => {
+        cleanup();
+        reject(new Error('Layanan Apps Script tidak merespons. Coba lagi.'));
+      }, 30000);
+      script.src = endpoint + separator + params.toString();
+      document.head.appendChild(script);
+    });
+
+    const MONTHS = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+    const money = (value, currency='IDR') => new Intl.NumberFormat('id-ID',{style:'currency',currency,maximumFractionDigits:0}).format(Number(value)||0);
+    const shortMoney = (value) => {
+      const n=Number(value)||0;
+      if(Math.abs(n)>=1000000000)return 'Rp '+(n/1000000000).toFixed(1).replace('.',',')+' M';
+      if(Math.abs(n)>=1000000)return 'Rp '+(n/1000000).toFixed(1).replace('.',',')+' jt';
+      if(Math.abs(n)>=1000)return 'Rp '+(n/1000).toFixed(0)+' rb';
+      return money(n);
+    };
+    const niceDate = (value) => {
+      if(!value)return '—';
+      const d=new Date(value+'T00:00:00');
+      return Number.isNaN(d.getTime()) ? value : new Intl.DateTimeFormat('id-ID',{day:'numeric',month:'short',year:'numeric'}).format(d);
+    };
+    const Icon = ({name,className=''}) => <span className={'material-symbols-outlined '+className}>{name}</span>;
+
+    function Toast({toast,onClose}){
+      useEffect(()=>{if(!toast)return;const timer=setTimeout(onClose,3600);return()=>clearTimeout(timer)},[toast]);
+      if(!toast)return null;
+      const ok=toast.type!=='error';
+      return <div className="toast fixed z-[80] right-5 bottom-5 max-w-[calc(100%-40px)] flex items-center gap-3 bg-white border border-[#e8eeea] shadow-xl rounded-2xl px-4 py-3.5">
+        <span className={'w-8 h-8 rounded-full flex items-center justify-center '+(ok?'bg-[#e9f5ef] text-[#167c65]':'bg-[#fff0ed] text-[#cf5d4c')}><Icon name={ok?'check_circle':'error'}/></span>
+        <div><div className="text-[13px] font-semibold text-[#25332e]">{ok?'Berhasil':'Ada kendala'}</div><div className="text-[12px] text-[#718079] mt-0.5">{toast.message}</div></div>
+        <button className="ml-2 text-[#94a19b]" onClick={onClose}><Icon name="close"/></button>
+      </div>;
+    }
+
+    function Sidebar({view,setView,open,onClose,onAdd,onLogout}){
+      const items=[{id:'dashboard',label:'Dashboard',icon:'space_dashboard'},{id:'transactions',label:'Transaksi',icon:'receipt_long'},{id:'categories',label:'Kategori',icon:'sell'},{id:'accounts',label:'Rekening',icon:'account_balance'},{id:'reports',label:'Laporan',icon:'bar_chart'},{id:'audit',label:'Aktivitas',icon:'history'},{id:'settings',label:'Pengaturan',icon:'settings'}];
+      return <>
+        {open&&<div className="mobile-overlay fixed inset-0 z-20 lg:hidden" onClick={onClose}/>}
+        <aside className={'sidebar '+(open?'open':'')}>
+          <div className="flex items-center gap-3 px-3 mb-10">
+            <div className="w-10 h-10 rounded-[14px] bg-[#176e59] text-white grid place-items-center shadow-lg shadow-emerald-900/10"><Icon name="account_balance_wallet"/></div>
+            <div><div className="outfit text-[19px] font-bold tracking-[-.5px] leading-tight">ruang<span className="text-[#167c65]">uang</span></div><div className="text-[10px] text-[#96a19c] tracking-[1.3px] uppercase mt-0.5">Personal finance</div></div>
+          </div>
+          <div className="px-3 mb-2 text-[10px] font-bold uppercase tracking-[1.5px] text-[#a0aaa5]">Workspace</div>
+          <nav className="space-y-1">
+            {items.map(item=><button key={item.id} onClick={()=>{setView(item.id);onClose()}} className={'nav-item '+(view===item.id?'active':'')}><Icon name={item.icon}/><span>{item.label}</span>{item.id==='transactions'&&<span className="ml-auto text-[10px] rounded-full bg-white/70 px-2 py-1">Baru</span>}</button>)}
+          </nav>
+          <div className="mt-auto">
+            <div className="mx-2 mb-4 rounded-2xl bg-[#f5f8f6] p-4 border border-[#edf1ee]">
+              <div className="flex items-center gap-2 text-[#387962]"><Icon name="shield_lock"/><span className="text-[11px] font-semibold">Privat & tersimpan</span></div>
+              <p className="text-[11px] text-[#84918b] leading-[1.6] mt-2 mb-0">Catatan keuanganmu dikelola di spreadsheet pribadimu.</p>
+            </div>
+            <div className="flex items-center gap-3 px-3 pt-4 border-t border-[#edf0ee]">
+              <div className="w-9 h-9 rounded-full bg-[#e9f3ed] text-[#247258] grid place-items-center font-bold text-sm">S</div>
+              <div className="min-w-0"><div className="text-[12px] font-semibold truncate">Keuangan pribadi</div><div className="text-[10px] text-[#96a19c]">Ruang personal</div></div>
+              <Icon name="more_horiz" className="ml-auto text-[#98a49e]"/>
+            </div>
+            <button type="button" onClick={onLogout} className="nav-item mt-3"><Icon name="logout"/><span>Keluar</span></button>
+          </div>
+        </aside>
+      </>;
+    }
+
+    function Topbar({view,month,year,setPeriod,onMenu,onAdd,settings}){
+      const titles={dashboard:['Ringkasan keuangan','Pantau arus uangmu dengan lebih tenang.'],transactions:['Transaksi','Cari, saring, edit, dan kelola catatan keuanganmu.'],categories:['Kategori transaksi','Atur kategori agar catatanmu tetap rapi.'],accounts:['Rekening','Kelola rekening untuk mencatat sumber pemasukan.'],reports:['Laporan bulanan','Ringkasan dan rincian transaksi pada periode terpilih.'],audit:['Aktivitas','Lihat catatan perubahan penting pada data keuanganmu.'],settings:['Pengaturan','Sesuaikan profil dan preferensi keuanganmu.']};
+      const title=titles[view]||titles.dashboard;
+      return <header className="flex flex-wrap items-center justify-between gap-4 px-6 lg:px-10 pt-7 pb-5 mobile-pad">
+        <div className="flex items-start gap-3">
+          <button className="lg:hidden w-9 h-9 rounded-xl border border-[#e6ece8] bg-white text-[#58665f]" onClick={onMenu}><Icon name="menu"/></button>
+          <div><div className="text-[11px] text-[#98a29d] mb-1">Keuangan pribadi <span className="mx-1.5">/</span><span className="text-[#63716a]">{title[0]}</span></div><h1 className="outfit text-[25px] sm:text-[29px] leading-tight font-semibold tracking-[-.7px]">{title[0]}</h1><p className="text-[12px] sm:text-[13px] text-[#8a9690] mt-1">{title[1]}</p></div>
+        </div>
+        <div className="flex items-center gap-2.5 ml-auto">
+          <div className="hidden sm:flex items-center gap-2 bg-white border border-[#e8eeea] rounded-xl px-3 py-2">
+            <Icon name="calendar_month" className="text-[#7c8c84]"/>
+            <select aria-label="Pilih bulan" className="bg-transparent border-0 outline-none text-[12px] text-[#495850] font-medium" value={month} onChange={e=>setPeriod(Number(e.target.value),year)}>{MONTHS.map((m,i)=><option key={m} value={i+1}>{m}</option>)}</select>
+            <span className="w-px h-4 bg-[#e6ece8]"/>
+            <select aria-label="Pilih tahun" className="bg-transparent border-0 outline-none text-[12px] text-[#495850] font-medium" value={year} onChange={e=>setPeriod(month,Number(e.target.value))}>{Array.from({length:7},(_,i)=>new Date().getFullYear()-3+i).map(y=><option key={y}>{y}</option>)}</select>
+          </div>
+          <button className="btn-primary !rounded-full !px-4 !py-[10px]" onClick={onAdd}><Icon name="add"/> <span className="hidden sm:inline">Tambah transaksi</span><span className="sm:hidden">Tambah</span></button>
+          <div className="hidden md:grid w-9 h-9 rounded-full bg-[#e8f2ed] text-[#277158] place-items-center text-[12px] font-bold">{(settings?.name||'S').slice(0,1).toUpperCase()}</div>
+        </div>
+        <div className="sm:hidden w-full flex items-center gap-2 bg-white border border-[#e8eeea] rounded-xl px-3 py-2">
+          <Icon name="calendar_month" className="text-[#7c8c84]"/>
+          <select className="bg-transparent border-0 outline-none text-[12px] flex-1" value={month} onChange={e=>setPeriod(Number(e.target.value),year)}>{MONTHS.map((m,i)=><option key={m} value={i+1}>{m}</option>)}</select>
+          <select className="bg-transparent border-0 outline-none text-[12px]" value={year} onChange={e=>setPeriod(month,Number(e.target.value))}>{Array.from({length:7},(_,i)=>new Date().getFullYear()-3+i).map(y=><option key={y}>{y}</option>)}</select>
+        </div>
+      </header>;
+    }
+
+    function Hero({month,year,onAdd}){
+      return <section className="hero-gradient relative overflow-hidden rounded-[22px] px-6 sm:px-8 py-7 sm:py-8 text-white mb-6">
+        <div className="absolute -right-10 -top-24 w-72 h-72 rounded-full border border-white/[.09]"/><div className="absolute right-9 -bottom-36 w-72 h-72 rounded-full border border-white/[.08]"/>
+        <div className="absolute right-[14%] top-8 w-28 h-28 rounded-full bg-[#b8e2c9]/[.08] blur-2xl"/>
+        <div className="relative z-10 max-w-[700px]">
+          <div className="inline-flex items-center gap-2 px-3 py-[6px] rounded-full bg-white/[.12] border border-white/[.13] text-white/90 text-[10px] font-bold tracking-[1.2px] uppercase mb-4"><Icon name="verified_user" className="!text-[15px]"/> Keuanganmu, lebih terkendali</div>
+          <h2 className="outfit text-[31px] sm:text-[39px] leading-[1.08] tracking-[-1.1px] font-semibold max-w-[580px]">Lebih paham ke mana<br className="hidden sm:block"/> uangmu pergi.</h2>
+          <p className="text-[12px] sm:text-[13px] text-white/70 leading-relaxed max-w-[460px] mt-3 mb-5">Satu tempat untuk mencatat pemasukan, mengelola pengeluaran, dan membangun kebiasaan finansial yang lebih sehat.</p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-full bg-white text-[#145e4c] px-4 py-[10px] text-[12px] font-bold hover:bg-[#f0f8f3] transition"><Icon name="add_circle"/> Catat transaksi</button>
+            <span className="text-[11px] text-white/60 flex items-center gap-1.5"><Icon name="calendar_today" className="!text-[15px]"/> {MONTHS[month-1]} {year}</span>
+          </div>
+        </div>
+        <div className="hidden lg:flex absolute right-10 top-1/2 -translate-y-1/2 w-[200px] h-[145px] rounded-[20px] border border-white/[.14] bg-white/[.08] backdrop-blur-sm p-4 rotate-[3deg]">
+          <div className="w-full">
+            <div className="flex items-center justify-between text-[9px] text-white/65"><span>ARUS KAS</span><Icon name="trending_up" className="!text-[15px]"/></div>
+            <div className="flex items-end gap-2 h-[75px] mt-2">{[30,48,39,66,53,82,70,96,72,100,84,115].map((h,i)=><div key={i} className="flex-1 rounded-t-full bg-white/70" style={{height:Math.min(h,72)+'%'}}/>)}</div>
+            <div className="h-px bg-white/20 mt-2"/><div className="text-[9px] text-white/65 mt-2">Lebih sadar. Lebih terarah.</div>
+          </div>
+        </div>
+      </section>;
+    }
+
+    function FeatureCards(){
+      const features=[{icon:'bolt',title:'Catat dengan cepat',text:'Pemasukan dan pengeluaran tersimpan dalam beberapa langkah.',tone:'#eef6f0',ink:'#32805d'},{icon:'donut_small',title:'Pahami pola belanja',text:'Lihat gambaran pengeluaranmu berdasarkan kategori.',tone:'#f1effa',ink:'#7862b1'},{icon:'calendar_month',title:'Fokus per bulan',text:'Bandingkan arus kas setiap periode dengan lebih mudah.',tone:'#fdf3e8',ink:'#c8873b'}];
+      return <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">{features.map(f=><div key={f.title} className="card flex items-start gap-3.5 p-4">
+        <div className="w-10 h-10 shrink-0 rounded-[13px] grid place-items-center" style={{background:f.tone,color:f.ink}}><Icon name={f.icon}/></div>
+        <div><div className="text-[12px] font-semibold text-[#34433c]">{f.title}</div><p className="text-[11px] leading-[1.55] text-[#8a9690] mt-1 mb-0">{f.text}</p></div>
+      </div>)}</div>;
+    }
+
+    function Metric({icon,label,value,change,positive,tone,sub}){
+      return <div className="card metric-card fade-up" style={{'--orb':tone+'55'}}>
+        <div className="flex items-center justify-between relative z-[1]"><span className="text-[11px] font-medium text-[#7f8c85]">{label}</span><span className="w-8 h-8 rounded-[11px] grid place-items-center" style={{background:tone,color:positive?'#167c65':'#b96f52'}}><Icon name={icon} className="!text-[18px]"/></span></div>
+        <div className="outfit text-[22px] sm:text-[24px] tracking-[-.5px] font-semibold mt-4 relative z-[1]">{value}</div>
+        <div className="flex items-center gap-1.5 mt-2 relative z-[1]"><span className={'text-[10px] font-semibold '+(positive?'text-[#278263]':'text-[#bf755e]')}>{change}</span><span className="text-[10px] text-[#a0aaa5]">{sub}</span></div>
+      </div>;
+    }
+
+    function CashFlowChart({data,currency}){
+      const width=660,height=222,pad={l:49,r:10,t:15,b:29};
+      const chartW=width-pad.l-pad.r,chartH=height-pad.t-pad.b;
+      const max=Math.max(1,...(data||[]).flatMap(x=>[Number(x.income)||0,Number(x.expense)||0]))*1.16;
+      const points=(key)=> (data||[]).map((d,i)=>({x:pad.l+(data.length<=1?chartW/2:i*chartW/(data.length-1)),y:pad.t+chartH-(Number(d[key])||0)/max*chartH}));
+      const income=points('income'),expense=points('expense');
+      const path=(arr)=>arr.map((p,i)=>(i?'L':'M')+' '+p.x+' '+p.y).join(' ');
+      const grid=[0,.33,.66,1];
+      return <div className="w-full overflow-hidden">
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto min-h-[190px]" role="img" aria-label="Grafik arus kas pemasukan dan pengeluaran">
+          {grid.map((v,i)=>{const y=pad.t+chartH-v*chartH;return <g key={i}><line x1={pad.l} y1={y} x2={width-pad.r} y2={y} stroke="#edf1ee" strokeDasharray="4 5"/><text x={pad.l-8} y={y+4} textAnchor="end" fill="#a0aaa5" fontSize="9">{shortMoney(max*v).replace('Rp ','')}</text></g>})}
+          {income.length>1&&<path d={`${path(income)} L ${income[income.length-1].x} ${pad.t+chartH} L ${income[0].x} ${pad.t+chartH} Z`} fill="url(#incomeFill)" opacity=".8"/>}
+          <defs><linearGradient id="incomeFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#2e9b77" stopOpacity=".22"/><stop offset="100%" stopColor="#2e9b77" stopOpacity="0"/></linearGradient></defs>
+          <path d={path(income)} fill="none" stroke="#25916e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d={path(expense)} fill="none" stroke="#e0a36e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+          {income.map((p,i)=><g key={'i'+i}><circle cx={p.x} cy={p.y} r="3.5" fill="#fff" stroke="#25916e" strokeWidth="2"/><text x={p.x} y={height-8} textAnchor="middle" fill="#97a29c" fontSize="9">{data[i]?.label||''}</text></g>)}
+          {expense.map((p,i)=><circle key={'e'+i} cx={p.x} cy={p.y} r="3.5" fill="#fff" stroke="#e0a36e" strokeWidth="2"/>)}
+        </svg>
+      </div>;
+    }
+
+    function Breakdown({items,currency}){
+      const safe=items||[];
+      const colors=['#238467','#79b99a','#e3ae76','#8d82bf','#da8c78','#78a7b7','#a7b97d'];
+      const total=safe.reduce((s,x)=>s+(Number(x.amount)||0),0);
+      let cursor=0;
+      const stops=safe.map((x,i)=>{const pct=total?Number(x.amount)/total*100:0;const part=`${colors[i%colors.length]} ${cursor}% ${cursor+pct}%`;cursor+=pct;return part}).join(',');
+      return <div>
+        {safe.length>0?<div className="flex items-center gap-5">
+          <div className="w-[112px] h-[112px] sm:w-[128px] sm:h-[128px] rounded-full shrink-0 relative" style={{background:`conic-gradient(${stops})`}}><div className="absolute inset-[16px] rounded-full bg-white flex flex-col items-center justify-center"><span className="text-[9px] text-[#99a49e]">TOTAL</span><span className="text-[12px] font-bold text-[#304139] mt-1">{shortMoney(total)}</span></div></div>
+          <div className="flex-1 space-y-3 min-w-0">{safe.slice(0,5).map((x,i)=><div key={x.categoryId||x.name} className="flex items-center gap-2 min-w-0"><span className="w-2 h-2 rounded-full shrink-0" style={{background:colors[i%colors.length]}}/><span className="text-[11px] text-[#78867f] truncate flex-1">{x.name}</span><span className="text-[11px] font-semibold text-[#405049]">{Math.round((Number(x.amount)||0)/total*100)}%</span></div>)}</div>
+        </div>:<div className="h-[150px] flex flex-col items-center justify-center text-center"><div className="w-10 h-10 rounded-full bg-[#f3f7f4] grid place-items-center text-[#9aaa9f]"><Icon name="donut_small"/></div><div className="text-[12px] font-medium text-[#5b6962] mt-3">Belum ada pengeluaran</div><div className="text-[11px] text-[#9aa59f] mt-1">Kategori pengeluaran akan muncul di sini.</div></div>}
+      </div>;
+    }
+
+    function DashboardView({dashboard,transactions,currency,loading,onAdd,month,year}){
+      if(loading&&!dashboard)return <div className="card h-64 grid place-items-center"><div className="flex items-center gap-3 text-[13px] text-[#77857d]"><span className="spinner spinner-dark"/> Menyiapkan ringkasan keuangan…</div></div>;
+      const d=dashboard||{};
+      const prev=d.previousPeriod||{};
+      const pct=(value,prior)=>{if(!prior)return value?'Baru':'0%';const n=((value-prior)/Math.abs(prior))*100;return (n>=0?'+':'')+n.toFixed(0)+'%'};
+      const changeText=(value,prior)=>`vs bulan lalu ${pct(value,prior)}`;
+      return <div className="fade-up">
+        <Hero month={month} year={year} onAdd={onAdd}/>
+        <FeatureCards/>
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+          <Metric icon="account_balance_wallet" label="Saldo keseluruhan" value={money(d.balance,currency)} change={changeText(d.balance,prev.balance)} positive tone="#eaf4ed" sub="per akhir periode"/>
+          <Metric icon="south_west" label="Total pemasukan" value={money(d.income,currency)} change={changeText(d.income,prev.income)} positive tone="#eaf5ef" sub="dibanding periode lalu"/>
+          <Metric icon="north_east" label="Total pengeluaran" value={money(d.expense,currency)} change={changeText(d.expense,prev.expense)} positive={false} tone="#fbefe9" sub="dibanding periode lalu"/>
+          <Metric icon="savings" label="Tersisa bulan ini" value={money((Number(d.income)||0)-(Number(d.expense)||0),currency)} change={`${Number(d.savingsRate)||0}% dari pemasukan`} positive tone="#f3f0fa" sub="tingkat tabungan"/>
+        </div>
+        <div className="grid grid-cols-1 xl:grid-cols-[1.55fr_1fr] gap-4 mb-5">
+          <section className="card p-5 sm:p-6">
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+              <div><h3 className="text-[14px] font-semibold text-[#34433c]">Arus kas bulanan</h3><p className="text-[11px] text-[#98a39d] mt-1">Perbandingan pemasukan dan pengeluaran 6 bulan terakhir</p></div>
+              <div className="flex items-center gap-3"><span className="flex items-center gap-1.5 text-[10px] text-[#77857e]"><i className="w-2 h-2 rounded-full bg-[#25916e]"/> Pemasukan</span><span className="flex items-center gap-1.5 text-[10px] text-[#77857e]"><i className="w-2 h-2 rounded-full bg-[#e0a36e]"/> Pengeluaran</span></div>
+            </div>
+            <CashFlowChart data={d.cashFlowTrend||[]} currency={currency}/>
+          </section>
+          <section className="card p-5 sm:p-6">
+            <div className="mb-4"><h3 className="text-[14px] font-semibold text-[#34433c]">Pengeluaran per kategori</h3><p className="text-[11px] text-[#98a39d] mt-1">{MONTHS[month-1]} {year}</p></div>
+            <Breakdown items={d.categoryBreakdown||[]} currency={currency}/>
+          </section>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="card p-4 flex items-center gap-3"><div className="w-9 h-9 rounded-xl bg-[#f1f5f2] text-[#668173] grid place-items-center"><Icon name="receipt_long"/></div><div><div className="text-[10px] text-[#929e97]">Transaksi bulan ini</div><div className="text-[15px] font-semibold text-[#35443d] mt-1">{d.transactionCount||0} <span className="text-[10px] font-normal text-[#98a39d]">catatan</span></div></div></div>
+          <div className="card p-4 flex items-center gap-3"><div className="w-9 h-9 rounded-xl bg-[#fbf3e9] text-[#bd8952] grid place-items-center"><Icon name="avg_pace"/></div><div><div className="text-[10px] text-[#929e97]">Rata-rata pengeluaran harian</div><div className="text-[15px] font-semibold text-[#35443d] mt-1">{money(d.averageDailyExpense,currency)}</div></div></div>
+          <div className="card p-4 flex items-center gap-3"><div className="w-9 h-9 rounded-xl bg-[#edf4f8] text-[#638da4] grid place-items-center"><Icon name="lightbulb"/></div><div><div className="text-[10px] text-[#929e97]">Kebiasaan baik dimulai dari sini</div><div className="text-[11px] font-medium text-[#52645a] mt-1">Catat transaksi secara rutin.</div></div></div>
+        </div>
+      </div>;
+    }
+
+    function TransactionModal({open,onClose,onSave,categories,accounts,defaultType,settings,editTransaction}){
+      const [type,setType]=useState(defaultType||'expense');
+      const [amount,setAmount]=useState('');
+      const [categoryId,setCategoryId]=useState('');
+      const [accountId,setAccountId]=useState('');
+      const [date,setDate]=useState(new Date().toISOString().slice(0,10));
+      const [note,setNote]=useState('');
+      const [error,setError]=useState('');
+      const [busy,setBusy]=useState(false);
+      const available=(categories||[]).filter(c=>c.type===type&&c.isActive);
+      const availableAccounts=(accounts||[]).filter(a=>a.isActive);
+      useEffect(()=>{if(open){setType(editTransaction?.type||defaultType||'expense');setAmount(editTransaction?String(editTransaction.amount):'');setCategoryId(editTransaction?.categoryId||'');setAccountId(editTransaction?.source||'');setDate(editTransaction?.transactionDate||new Date().toISOString().slice(0,10));setNote(editTransaction?.note||'');setError('')}},[open,defaultType,editTransaction]);
+      useEffect(()=>{if(!available.some(c=>c.id===categoryId))setCategoryId(available[0]?.id||'')},[type,categories]);
+      useEffect(()=>{if(!availableAccounts.some(a=>a.id===accountId))setAccountId(availableAccounts[0]?.id||'')},[type,accounts,accountId]);
+      if(!open)return null;
+      const submit=async(e)=>{e.preventDefault();setError('');const value=Number(String(amount).replace(/[.,\s]/g,''));if(!Number.isFinite(value)||value<=0){setError('Nominal harus lebih dari nol.');return}if(!date||Number.isNaN(new Date(date+'T00:00:00').getTime())){setError('Pilih tanggal transaksi yang valid.');return}if(!categoryId){setError('Pilih kategori terlebih dahulu.');return}
+        if(!accountId){setError('Pilih rekening sumber transaksi terlebih dahulu.');return}
+        setBusy(true);try{await onSave({...(editTransaction?{id:editTransaction.id}:{}),type,amount:value,categoryId,accountId,transactionDate:date,note:note.trim()});onClose()}catch(err){setError(err.message||'Transaksi belum berhasil disimpan.')}finally{setBusy(false)}
+      };
+      return <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#14251d]/40 backdrop-blur-[3px]" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)onClose()}}>
+        <div className="w-full max-w-[480px] bg-white rounded-[22px] shadow-2xl overflow-hidden fade-up">
+          <div className="px-6 pt-6 pb-4 border-b border-[#eef1ef] flex items-start justify-between">
+            <div><div className="w-10 h-10 rounded-[13px] bg-[#eaf5ef] text-[#167c65] grid place-items-center mb-3"><Icon name="edit_note"/></div><h2 className="outfit text-[21px] font-semibold tracking-[-.4px]">{editTransaction?'Edit transaksi':'Catat transaksi'}</h2><p className="text-[12px] text-[#89958f] mt-1">Masukkan detail transaksi keuanganmu.</p></div>
+            <button disabled={busy} onClick={onClose} className="w-8 h-8 rounded-full hover:bg-[#f3f6f4] text-[#8b9891] grid place-items-center"><Icon name="close"/></button>
+          </div>
+          <form onSubmit={submit} className="p-6">
+            <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-[#f3f6f4] mb-5">
+              <button type="button" onClick={()=>setType('expense')} className={'rounded-[9px] py-2.5 text-[12px] font-semibold flex items-center justify-center gap-2 '+(type==='expense'?'bg-white text-[#b86b54] shadow-sm':'text-[#8b9791]')}><Icon name="north_east" className="!text-[17px]"/> Pengeluaran</button>
+              <button type="button" onClick={()=>setType('income')} className={'rounded-[9px] py-2.5 text-[12px] font-semibold flex items-center justify-center gap-2 '+(type==='income'?'bg-white text-[#278064] shadow-sm':'text-[#8b9791]')}><Icon name="south_west" className="!text-[17px]"/> Pemasukan</button>
+            </div>
+            <div className="space-y-4">
+              <div><label className="label">Nominal <span className="text-[#cf7862]">*</span></label><div className="relative"><span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[13px] font-semibold text-[#87938d]">{settings?.currency==='USD'?'$':'Rp'}</span><input className="input !pl-12 !py-3 text-[16px] font-semibold" inputMode="numeric" placeholder="0" value={amount} onChange={e=>setAmount(e.target.value.replace(/[^\d.,]/g,''))}/></div></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="label">Tanggal</label><input className="input" type="date" value={date} onChange={e=>setDate(e.target.value)}/></div>
+                <div><label className="label">Kategori</label><select className="input" value={categoryId} onChange={e=>setCategoryId(e.target.value)}><option value="">Pilih kategori</option>{available.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+              </div>
+              <div><label className="label">Rekening sumber</label><select className="input" value={accountId} onChange={e=>setAccountId(e.target.value)}><option value="">Pilih rekening</option>{availableAccounts.map(a=><option key={a.id} value={a.id}>{a.name}{a.accountNumber?' · '+a.accountNumber:''}</option>)}</select>{availableAccounts.length===0&&<p className="text-[10px] text-[#bd755c] mt-1">Tambahkan rekening terlebih dahulu melalui menu Rekening.</p>}</div>
+              <div><label className="label">Catatan <span className="text-[#a1aaa5] font-normal">(opsional)</span></label><textarea className="input resize-none" rows="2" placeholder="Contoh: Belanja kebutuhan mingguan" value={note} onChange={e=>setNote(e.target.value)} maxLength="240"/></div>
+              {available.length===0&&<div className="rounded-xl bg-[#fff7ed] text-[#a7743f] text-[11px] p-3">Belum ada kategori aktif untuk jenis transaksi ini. Tambahkan kategori terlebih dahulu.</div>}
+              {error&&<div className="rounded-xl bg-[#fff1ef] text-[#bd594c] text-[11px] p-3 flex items-center gap-2"><Icon name="error" className="!text-[17px]"/>{error}</div>}
+            </div>
+                          <div className="flex justify-end gap-2 mt-6"><button type="button" disabled={busy} className="btn-secondary" onClick={onClose}>Batal</button><button disabled={busy||!available.length} className="btn-primary min-w-[140px]">{busy?<span className="spinner"/>:<><Icon name="check"/> {editTransaction?'Simpan perubahan':'Simpan catatan'}</>}</button></div>
+          </form>
+        </div>
+      </div>;
+    }
+
+    function CategoriesView({categories,onCreate,onUpdate,loading}){
+      const [filter,setFilter]=useState('all');
+      const [modal,setModal]=useState(false);
+      const [name,setName]=useState('');
+      const [type,setType]=useState('expense');
+      const [icon,setIcon]=useState('sell');
+      const [color,setColor]=useState('#238467');
+      const [error,setError]=useState('');
+      const [busy,setBusy]=useState(false);
+      const [editTarget,setEditTarget]=useState(null);
+      const [active,setActive]=useState(true);
+      const filtered=(categories||[]).filter(c=>filter==='all'||c.type===filter);
+      const startCreate=()=>{setEditTarget(null);setName('');setType('expense');setIcon('sell');setColor('#238467');setActive(true);setError('');setModal(true)};
+      const startEdit=(category)=>{setEditTarget(category);setName(category.name);setType(category.type);setIcon(category.icon||'sell');setColor(category.color||'#238467');setActive(category.isActive);setError('');setModal(true)};
+      const submit=async(e)=>{e.preventDefault();if(!name.trim()){setError('Nama kategori perlu diisi.');return}setBusy(true);setError('');try{const payload={name:name.trim(),type,icon,color,isActive:active};if(editTarget)await onUpdate(editTarget.id,payload);else await onCreate(payload);setModal(false);setName('');setEditTarget(null)}catch(err){setError(err.message||'Kategori belum berhasil disimpan.')}finally{setBusy(false)}};
+      return <div className="fade-up">
+        <div className="hero-gradient rounded-[22px] p-6 sm:p-7 text-white relative overflow-hidden mb-5">
+          <div className="absolute -right-12 -top-28 w-64 h-64 rounded-full border border-white/10"/><div className="relative z-10 max-w-[600px]">
+            <div className="inline-flex items-center gap-2 text-[10px] uppercase tracking-[1.3px] font-bold text-white/75 mb-3"><Icon name="sell" className="!text-[15px]"/> Pengelolaan kategori</div>
+            <h2 className="outfit text-[27px] sm:text-[32px] font-semibold tracking-[-.6px]">Buat catatan lebih teratur.</h2>
+            <p className="text-[12px] text-white/70 mt-2 max-w-[440px]">Kategori membantu kamu melihat pola pemasukan dan pengeluaran. Sesuaikan dengan cara kamu mengelola uang.</p>
+            <button onClick={startCreate} className="mt-4 inline-flex items-center gap-2 rounded-full bg-white text-[#145e4c] px-4 py-2.5 text-[12px] font-bold"><Icon name="add"/> Tambah kategori</button>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+          {[{key:'all',label:'Semua kategori',count:(categories||[]).length,icon:'grid_view'},{key:'expense',label:'Pengeluaran',count:(categories||[]).filter(c=>c.type==='expense').length,icon:'north_east'},{key:'income',label:'Pemasukan',count:(categories||[]).filter(c=>c.type==='income').length,icon:'south_west'}].map(x=><button key={x.key} onClick={()=>setFilter(x.key)} className={'card p-4 text-left flex items-center gap-3 transition '+(filter===x.key?'!border-[#bad8ca] shadow-sm':'hover:border-[#dce6df]')}><span className="w-9 h-9 rounded-xl bg-[#eef5f0] text-[#387b5f] grid place-items-center"><Icon name={x.icon}/></span><span className="flex-1"><span className="block text-[11px] text-[#8c9891]">{x.label}</span><span className="block text-[17px] font-semibold mt-1">{x.count}</span></span><Icon name="chevron_right" className="text-[#a3ada7]"/></button>)}
+        </div>
+        <section className="card p-5 sm:p-6">
+          <div className="flex items-center justify-between mb-4"><div><h3 className="text-[14px] font-semibold">Daftar kategori</h3><p className="text-[11px] text-[#98a39d] mt-1">Kategori bawaan bisa kamu lengkapi dengan kategori sendiri.</p></div><span className="pill bg-[#f1f5f2] text-[#718078]">{filtered.length} kategori</span></div>
+          {loading?<div className="py-14 flex justify-center"><span className="spinner spinner-dark"/></div>:filtered.length===0?<div className="py-14 text-center text-[12px] text-[#96a29b]">Belum ada kategori yang cocok.</div>:<div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            {filtered.map(c=><div key={c.id} className="rounded-[14px] border border-[#edf1ee] p-3.5 flex items-center gap-3 hover:border-[#dce7e0] transition">
+              <span className="w-10 h-10 rounded-[13px] grid place-items-center" style={{color:c.color||'#258467',background:(c.color||'#258467')+'18'}}><Icon name={c.icon||'sell'}/></span>
+              <div className="flex-1 min-w-0"><div className="text-[12px] font-semibold text-[#34433c] truncate">{c.name}</div><div className="text-[10px] text-[#9aa59f] mt-1">{c.type==='income'?'Pemasukan':'Pengeluaran'}{c.isDefault?' · Bawaan':''}</div></div>
+              <div className="flex items-center gap-2"><span className={'text-[9px] font-semibold '+(c.isActive?'text-[#398362]':'text-[#99a39e]')}>{c.isActive?'Aktif':'Nonaktif'}</span><span className={'w-2 h-2 rounded-full '+(c.isActive?'bg-[#48a37d]':'bg-[#c6ceca]')} title={c.isActive?'Aktif':'Nonaktif'}/><button type="button" onClick={()=>startEdit(c)} className="w-8 h-8 rounded-lg text-[#738179] hover:bg-[#f2f6f3]" aria-label={'Edit kategori '+c.name}><Icon name="edit"/></button></div>
+            </div>)}
+          </div>}
+        </section>
+        {modal&&<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#14251d]/40 backdrop-blur-[3px]" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setModal(false)}}>
+          <div className="bg-white w-full max-w-[430px] rounded-[22px] shadow-2xl p-6 fade-up">
+            <div className="flex justify-between items-start"><div><div className="w-10 h-10 rounded-[13px] bg-[#eaf5ef] text-[#167c65] grid place-items-center mb-3"><Icon name="sell"/></div><h2 className="outfit text-[21px] font-semibold">{editTarget?'Edit kategori':'Kategori baru'}</h2><p className="text-[12px] text-[#89958f] mt-1">{editTarget?'Perbarui detail atau nonaktifkan kategori.':'Tambahkan kategori yang sesuai kebiasaanmu.'}</p></div><button onClick={()=>setModal(false)} className="text-[#8b9891]"><Icon name="close"/></button></div>
+            <form onSubmit={submit} className="mt-5 space-y-4">
+              <div><label className="label">Nama kategori</label><input className="input" autoFocus placeholder="Misalnya: Langganan digital" value={name} onChange={e=>setName(e.target.value)} maxLength="60"/></div>
+              <div><label className="label">Jenis kategori</label><div className="grid grid-cols-2 gap-2"><button type="button" onClick={()=>setType('expense')} className={'border rounded-xl p-2.5 text-[11px] font-semibold '+(type==='expense'?'border-[#e9c9bc] bg-[#fff7f3] text-[#b86b54]':'border-[#e8eeea] text-[#8b9791]')}>Pengeluaran</button><button type="button" onClick={()=>setType('income')} className={'border rounded-xl p-2.5 text-[11px] font-semibold '+(type==='income'?'border-[#b9dac9] bg-[#f1f8f3] text-[#278064]':'border-[#e8eeea] text-[#8b9791]')}>Pemasukan</button></div></div>
+              <div className="grid grid-cols-[1fr_74px] gap-3"><div><label className="label">Ikon</label><select className="input" value={icon} onChange={e=>setIcon(e.target.value)}>{['sell','restaurant','directions_car','home','shopping_bag','movie','medical_services','school','pets','flight','payments','work','redeem','savings','devices','favorite'].map(v=><option key={v} value={v}>{v.replace('_',' ')}</option>)}</select></div><div><label className="label">Warna</label><input className="input h-[42px] p-1.5" type="color" value={color} onChange={e=>setColor(e.target.value)}/></div></div>
+              {editTarget&&<label className="flex items-center gap-2 text-[12px] text-[#536159]"><input type="checkbox" checked={active} onChange={e=>setActive(e.target.checked)}/> Kategori aktif <span className="text-[10px] text-[#98a39d]">(kategori tidak aktif tetap muncul di riwayat lama)</span></label>}
+              {error&&<div className="rounded-xl bg-[#fff1ef] text-[#bd594c] text-[11px] p-3">{error}</div>}
+              <div className="flex justify-end gap-2 pt-1"><button type="button" className="btn-secondary" onClick={()=>setModal(false)}>Batal</button><button className="btn-primary min-w-[130px]" disabled={busy}>{busy?<span className="spinner"/>:<><Icon name={editTarget?'check':'add'}/> {editTarget?'Simpan perubahan':'Buat kategori'}</>}</button></div>
+            </form>
+          </div>
+        </div>}
+      </div>;
+    }
+
+    function TransactionsView({transactions,categories,currency,loading,onLoad,onEdit,onDelete,periodMode,setPeriodMode,selectedDate,setSelectedDate}){
+      const [search,setSearch]=useState('');
+      const [type,setType]=useState('');
+      const [categoryId,setCategoryId]=useState('');
+      const [sortBy,setSortBy]=useState('transactionDate');
+      const [sortDirection,setSortDirection]=useState('desc');
+      useEffect(()=>{onLoad({search,type,categoryId,sortBy,sortDirection,periodMode,date:periodMode==='daily'?selectedDate:''})},[search,type,categoryId,sortBy,sortDirection,periodMode,selectedDate]);
+      const categoryMap=Object.fromEntries((categories||[]).map(c=>[c.id,c.name]));
+      const changeSort=(key)=>{if(sortBy===key)setSortDirection(sortDirection==='asc'?'desc':'asc');else{setSortBy(key);setSortDirection('desc')}};
+      const sortMark=(key)=>sortBy===key?(sortDirection==='asc'?' ↑':' ↓'):'';
+      return <section className="card p-4 sm:p-6 fade-up">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4"><div><h2 className="text-[14px] font-semibold text-[#34433c]">Riwayat transaksi</h2><p className="text-[11px] text-[#98a39d] mt-1">Cari dan kelola transaksi pada bulan terpilih.</p></div><span className="pill bg-[#f1f5f2] text-[#718078]">{transactions.length} transaksi</span></div>
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <div className="inline-flex rounded-xl bg-[#f3f6f4] p-1">
+            <button type="button" onClick={()=>setPeriodMode('daily')} className={'rounded-[9px] px-3 py-2 text-[11px] font-semibold '+(periodMode==='daily'?'bg-white text-[#167c65] shadow-sm':'text-[#8b9791]')}>Harian</button>
+            <button type="button" onClick={()=>setPeriodMode('monthly')} className={'rounded-[9px] px-3 py-2 text-[11px] font-semibold '+(periodMode==='monthly'?'bg-white text-[#167c65] shadow-sm':'text-[#8b9791]')}>Bulanan</button>
+          </div>
+          {periodMode==='daily'&&<label className="flex items-center gap-2 text-[11px] text-[#7f8c85]"><span>Tanggal</span><input className="input !w-auto !py-2" type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)}/></label>}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-4">
+          <input className="input" placeholder="Cari catatan, kategori, atau nominal…" value={search} onChange={e=>setSearch(e.target.value)}/>
+          <select className="input" aria-label="Filter jenis transaksi" value={type} onChange={e=>setType(e.target.value)}><option value="">Semua jenis</option><option value="income">Pemasukan</option><option value="expense">Pengeluaran</option></select>
+          <select className="input" aria-label="Filter kategori" value={categoryId} onChange={e=>setCategoryId(e.target.value)}><option value="">Semua kategori</option>{categories.map(c=><option key={c.id} value={c.id}>{c.name}{c.isActive?'':' (nonaktif)'}</option>)}</select>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[850px] text-left">
+            <thead><tr className="border-b border-[#edf1ee] text-[10px] uppercase tracking-wide text-[#929e97]"><th className="py-3 px-2"><button onClick={()=>changeSort('transactionDate')}>Tanggal{sortMark('transactionDate')}</button></th><th className="py-3 px-2">Jenis</th><th className="py-3 px-2">Kategori</th><th className="py-3 px-2">Rekening sumber</th><th className="py-3 px-2 text-right"><button onClick={()=>changeSort('amount')}>Nominal{sortMark('amount')}</button></th><th className="py-3 px-2">Catatan</th><th className="py-3 px-2"><button onClick={()=>changeSort('createdAt')}>Dibuat{sortMark('createdAt')}</button></th><th className="py-3 px-2 text-right">Aksi</th></tr></thead>
+            <tbody>{loading?<tr><td colSpan="8" className="py-12 text-center"><span className="spinner spinner-dark inline-block"/></td></tr>:transactions.length===0?<tr><td colSpan="8" className="py-12 text-center text-[12px] text-[#98a39d]">Belum ada transaksi yang cocok pada periode ini.</td></tr>:transactions.map(t=><tr key={t.id} className="border-b border-[#f0f3f1] last:border-0 hover:bg-[#fbfcfb]">
+              <td className="py-3 px-2 text-[11px] text-[#66746d] whitespace-nowrap">{niceDate(t.transactionDate)}</td><td className="py-3 px-2"><span className={'pill !py-1 !px-2 '+(t.type==='income'?'bg-[#edf7f0] text-[#31805e]':'bg-[#fff3ee] text-[#b96d55]')}>{t.type==='income'?'Pemasukan':'Pengeluaran'}</span></td><td className="py-3 px-2 text-[11px] text-[#536159]">{categoryMap[t.categoryId]||'Tanpa kategori'}</td><td className="py-3 px-2 text-[11px] text-[#536159]">{t.accountName||'—'}</td><td className={'py-3 px-2 text-right text-[12px] font-semibold whitespace-nowrap '+(t.type==='income'?'text-[#31805e]':'text-[#b96d55]')}>{t.type==='income'?'+':'−'}{money(t.amount,currency)}</td><td className="py-3 px-2 text-[11px] text-[#7f8b85] max-w-[190px] truncate">{t.note||'—'}</td><td className="py-3 px-2 text-[10px] text-[#98a39d] whitespace-nowrap">{t.createdAt?niceDate(String(t.createdAt).slice(0,10)):'—'}</td><td className="py-3 px-2 text-right whitespace-nowrap"><button onClick={()=>onEdit(t)} className="w-8 h-8 rounded-lg text-[#738179] hover:bg-[#edf5f0]" aria-label="Edit transaksi"><Icon name="edit"/></button><button onClick={()=>onDelete(t)} className="w-8 h-8 rounded-lg text-[#b86b54] hover:bg-[#fff1ed]" aria-label="Hapus transaksi"><Icon name="delete"/></button></td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+      </section>;
+    }
+
+    function AccountsView({accounts,loading,onCreate,onUpdate,currency}){
+      const [name,setName]=useState('');
+      const [accountNumber,setAccountNumber]=useState('');
+      const [error,setError]=useState('');
+      const [busy,setBusy]=useState(false);
+      const [editTarget,setEditTarget]=useState(null);
+      const [active,setActive]=useState(true);
+      const startEdit=(account)=>{setEditTarget(account);setName(account.name);setAccountNumber(account.accountNumber||'');setActive(account.isActive);setError('')};
+      const submit=async(e)=>{e.preventDefault();if(!name.trim()){setError('Nama rekening perlu diisi.');return}setBusy(true);setError('');try{if(editTarget)await onUpdate(editTarget.id,{name:name.trim(),accountNumber:accountNumber.trim(),isActive:active});else await onCreate({name:name.trim(),accountNumber:accountNumber.trim()});setName('');setAccountNumber('');setEditTarget(null);setActive(true)}catch(err){setError(err.message||'Rekening belum berhasil disimpan.')}finally{setBusy(false)}};
+      return <div className="fade-up">
+        <section className="card p-5 sm:p-6 mb-4">
+          <div className="mb-4"><h2 className="text-[14px] font-semibold">Tambah rekening</h2><p className="text-[11px] text-[#98a39d] mt-1">Rekening akan tersedia sebagai sumber saat mencatat pemasukan.</p></div>
+          <form onSubmit={submit} className="flex flex-col sm:flex-row gap-2">
+            <input className="input flex-1" placeholder="Contoh: Gaji, Bank BCA, Tunai" value={name} onChange={e=>setName(e.target.value)} maxLength="60"/>
+            <input className="input flex-1" placeholder="Nomor rekening (opsional)" value={accountNumber} onChange={e=>setAccountNumber(e.target.value)} maxLength="40"/>
+            <button className="btn-primary" disabled={busy}>{busy?<span className="spinner"/>:<><Icon name={editTarget?'save':'add'}/>{editTarget?'Simpan perubahan':'Tambah rekening'}</>}</button>
+            {editTarget&&<button type="button" className="btn-secondary" onClick={()=>{setEditTarget(null);setName('');setAccountNumber('');setActive(true);setError('')}}>Batal edit</button>}
+          </form>
+          {editTarget&&<label className="flex items-center gap-2 text-[11px] text-[#536159] mt-3"><input type="checkbox" checked={active} onChange={e=>setActive(e.target.checked)}/> Rekening aktif</label>}
+          {error&&<div className="mt-3 rounded-xl bg-[#fff1ef] text-[#bd594c] text-[11px] p-3">{error}</div>}
+        </section>
+        <section className="card p-5 sm:p-6">
+          <div className="flex items-center justify-between mb-4"><div><h2 className="text-[14px] font-semibold">Daftar rekening</h2><p className="text-[11px] text-[#98a39d] mt-1">Rekening nonaktif tetap terlihat di catatan pemasukan lama.</p></div><span className="pill bg-[#f1f5f2] text-[#718078]">{accounts.length} rekening</span></div>
+          {loading?<div className="py-12 flex justify-center"><span className="spinner spinner-dark"/></div>:accounts.length===0?<div className="py-12 text-center text-[12px] text-[#96a29b]">Belum ada rekening.</div>:<div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">{accounts.map(a=><div key={a.id} className="rounded-[14px] border border-[#edf1ee] p-4 flex items-center gap-3"><span className="w-10 h-10 rounded-[13px] bg-[#eef5f0] text-[#387b5f] grid place-items-center"><Icon name="account_balance"/></span><div className="flex-1 min-w-0"><div className="text-[12px] font-semibold text-[#34433c] truncate">{a.name}</div>{a.accountNumber&&<div className="text-[10px] text-[#84918b] mt-1 truncate">No. rekening: {a.accountNumber}</div>}<div className={'text-[10px] mt-1 '+(a.isActive?'text-[#398362]':'text-[#99a39e]')}>{a.isActive?'Aktif':'Nonaktif'}</div><div className="text-[11px] font-semibold text-[#34433c] mt-2">Saldo: {money(a.balance,currency)}</div></div><button type="button" onClick={()=>startEdit(a)} className="w-8 h-8 rounded-lg text-[#738179] hover:bg-[#f2f6f3]" aria-label={'Edit rekening '+a.name}><Icon name="edit"/></button></div>)}</div>}
+        </section>
+      </div>;
+    }
+
+    function AuditLogsView(){
+      const [logs,setLogs]=useState([]);
+      const [loading,setLoading]=useState(true);
+      const [error,setError]=useState('');
+      const [refresh,setRefresh]=useState(0);
+      useEffect(()=>{
+        let alive=true;
+        setLoading(true);
+        setError('');
+        serverCall('getAuditLogs',200).then(r=>{
+          if(!r?.success)throw new Error(r?.message||'Aktivitas gagal dimuat.');
+          if(alive)setLogs(r.data.logs||[]);
+        }).catch(e=>{
+          if(alive)setError(e.message||'Aktivitas gagal dimuat.');
+        }).finally(()=>{
+          if(alive)setLoading(false);
+        });
+        return()=>{alive=false};
+      },[refresh]);
+      const actionLabel=(action)=>({create:'Membuat',update:'Memperbarui',delete:'Menghapus',reset:'Mengatur ulang'}[action]||action||'Aktivitas');
+      const entityLabel=(type)=>({transaction:'transaksi',category:'kategori',user_settings:'pengaturan pengguna',application:'aplikasi'}[type]||type||'data');
+      const formatTime=(value)=>{
+        if(!value)return '—';
+        const date=new Date(value);
+        return Number.isNaN(date.getTime())?value:new Intl.DateTimeFormat('id-ID',{dateStyle:'medium',timeStyle:'short'}).format(date);
+      };
+      return <section className="card p-4 sm:p-6 fade-up">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div><h2 className="text-[14px] font-semibold text-[#34433c]">Riwayat aktivitas</h2><p className="text-[11px] text-[#98a39d] mt-1">Catatan perubahan penting pada transaksi, kategori, dan pengaturan.</p></div>
+          <button className="btn-secondary" onClick={()=>setRefresh(v=>v+1)} disabled={loading}><Icon name="refresh"/> Muat ulang</button>
+        </div>
+        {error&&<div className="mb-4 rounded-xl bg-[#fff1ef] text-[#bd594c] text-[12px] p-3">{error}</div>}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[700px] text-left">
+            <thead><tr className="border-b border-[#edf1ee] text-[10px] uppercase tracking-wide text-[#929e97]"><th className="py-3 px-2">Waktu</th><th className="py-3 px-2">Aktivitas</th><th className="py-3 px-2">Data</th><th className="py-3 px-2">ID catatan</th><th className="py-3 px-2">Rincian</th></tr></thead>
+            <tbody>
+              {loading?<tr><td colSpan="5" className="py-12 text-center"><span className="spinner spinner-dark inline-block"/></td></tr>:
+                logs.length===0?<tr><td colSpan="5" className="py-12 text-center text-[12px] text-[#98a39d]">Belum ada aktivitas yang tercatat.</td></tr>:
+                logs.map(log=><tr key={log.id} className="border-b border-[#f0f3f1] last:border-0 hover:bg-[#fbfcfb]">
+                  <td className="py-3 px-2 text-[11px] text-[#66746d] whitespace-nowrap">{formatTime(log.createdAt)}</td>
+                  <td className="py-3 px-2"><span className="pill !py-1 !px-2 bg-[#edf7f0] text-[#31805e]">{actionLabel(log.action)}</span></td>
+                  <td className="py-3 px-2 text-[11px] text-[#536159]">{entityLabel(log.entityType)}</td>
+                  <td className="py-3 px-2 text-[10px] text-[#8a9690] max-w-[150px] truncate" title={log.entityId||''}>{log.entityId||'—'}</td>
+                  <td className="py-3 px-2 text-[11px] text-[#7f8b85] max-w-[240px] truncate" title={JSON.stringify(log.details||{})}>{Object.keys(log.details||{}).length?JSON.stringify(log.details):'—'}</td>
+                </tr>)
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>;
+    }
+
+    function ReportsView({month,year,currency,periodMode,setPeriodMode,selectedDate,setSelectedDate}){
+      const [report,setReport]=useState(null);
+      const [loading,setLoading]=useState(false);
+      const [error,setError]=useState('');
+      const [toast,setToast]=useState('');
+      useEffect(()=>{let alive=true;setLoading(true);setError('');serverCall('getReport',month,year,periodMode==='daily'?selectedDate:'').then(r=>{if(!r?.success)throw new Error(r?.message||'Laporan gagal dimuat.');if(alive)setReport(r.data)}).catch(e=>{if(alive)setError(e.message)}).finally(()=>{if(alive)setLoading(false)});return()=>{alive=false}},[month,year,periodMode,selectedDate]);
+      const exportCsv=async()=>{try{const r=await serverCall('exportTransactions',month,year,'csv',periodMode==='daily'?selectedDate:'');if(!r?.success)throw new Error(r?.message||'Ekspor gagal dibuat.');const blob=new Blob(['\\ufeff'+r.data.content],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=r.data.filename;a.click();URL.revokeObjectURL(url);setToast('CSV berhasil diunduh.');setTimeout(()=>setToast(''),3000)}catch(e){setError(e.message)}};
+      const summary=report?.summary||{};
+      return <div className="fade-up">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div><h2 className="text-[14px] font-semibold text-[#34433c]">{periodMode==='daily'?niceDate(selectedDate):MONTHS[month-1]+' '+year}</h2><p className="text-[11px] text-[#98a39d] mt-1">Ringkasan keuangan untuk periode terpilih.</p></div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-xl bg-[#f3f6f4] p-1">
+              <button type="button" onClick={()=>setPeriodMode('daily')} className={'rounded-[9px] px-3 py-2 text-[11px] font-semibold '+(periodMode==='daily'?'bg-white text-[#167c65] shadow-sm':'text-[#8b9791]')}>Harian</button>
+              <button type="button" onClick={()=>setPeriodMode('monthly')} className={'rounded-[9px] px-3 py-2 text-[11px] font-semibold '+(periodMode==='monthly'?'bg-white text-[#167c65] shadow-sm':'text-[#8b9791]')}>Bulanan</button>
+            </div>
+            {periodMode==='daily'&&<input aria-label="Pilih tanggal laporan" className="input !w-auto !py-2" type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)}/>}
+            <button className="btn-primary" onClick={exportCsv}><Icon name="download"/> Ekspor CSV</button>
+          </div>
+        </div>
+        {error&&<div className="mb-4 rounded-xl bg-[#fff1ef] text-[#bd594c] text-[12px] p-3">{error}</div>}
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+          {[['Pemasukan',money(summary.income,currency),'south_west'],['Pengeluaran',money(summary.expense,currency),'north_east'],['Saldo keseluruhan',money(summary.balance,currency),'account_balance_wallet'],['Tingkat tabungan',(summary.savingsRate||0)+'% · '+(summary.transactionCount||0)+' transaksi','savings']].map(x=><div key={x[0]} className="card p-4"><div className="flex items-center gap-2 text-[11px] text-[#839088]"><Icon name={x[2]}/>{x[0]}</div><div className="outfit text-[18px] font-semibold mt-3">{loading?'Memuat…':x[1]}</div></div>)}
+        </div>
+        <section className="card p-4 sm:p-6">
+          <div className="mb-4"><h3 className="text-[14px] font-semibold">Rincian transaksi</h3><p className="text-[11px] text-[#98a39d] mt-1">Seluruh transaksi pada periode terpilih.</p></div>
+          <div className="overflow-x-auto"><table className="w-full min-w-[740px] text-left"><thead><tr className="border-b border-[#edf1ee] text-[10px] uppercase tracking-wide text-[#929e97]"><th className="py-3 px-2">Tanggal</th><th className="py-3 px-2">Jenis</th><th className="py-3 px-2">Kategori</th><th className="py-3 px-2">Rekening sumber</th><th className="py-3 px-2 text-right">Nominal</th><th className="py-3 px-2">Catatan</th></tr></thead><tbody>{loading?<tr><td colSpan="6" className="py-10 text-center"><span className="spinner spinner-dark inline-block"/></td></tr>:(report?.transactions||[]).length===0?<tr><td colSpan="6" className="py-10 text-center text-[12px] text-[#98a39d]">Belum ada transaksi pada periode ini.</td></tr>:(report?.transactions||[]).map(t=><tr key={t.id} className="border-b border-[#f0f3f1] last:border-0"><td className="py-3 px-2 text-[11px] text-[#66746d]">{niceDate(t.transactionDate)}</td><td className="py-3 px-2 text-[11px]">{t.type==='income'?'Pemasukan':'Pengeluaran'}</td><td className="py-3 px-2 text-[11px]">{t.categoryName||'Tanpa kategori'}</td><td className="py-3 px-2 text-[11px]">{t.accountName||'—'}</td><td className="py-3 px-2 text-right text-[11px] font-semibold">{money(t.amount,currency)}</td><td className="py-3 px-2 text-[11px] text-[#7f8b85]">{t.note||'—'}</td></tr>)}</tbody></table></div>
+        </section>
+        {toast&&<div className="fixed z-[70] right-5 bottom-5 bg-white border border-[#e8eeea] shadow-xl rounded-xl px-4 py-3 text-[12px] text-[#287456]">{toast}</div>}
+      </div>;
+    }
+
+    function SettingsView({settings,onSave}){
+      const [name,setName]=useState(settings.name||'');
+      const [currency,setCurrency]=useState(settings.currency||'IDR');
+      const [timezone,setTimezone]=useState(settings.timezone||'Asia/Jakarta');
+      const [fiscalYearStart,setFiscalYearStart]=useState(settings.fiscalYearStart||1);
+      const [busy,setBusy]=useState(false);
+      const [message,setMessage]=useState('');
+      useEffect(()=>{setName(settings.name||'');setCurrency(settings.currency||'IDR');setTimezone(settings.timezone||'Asia/Jakarta');setFiscalYearStart(settings.fiscalYearStart||1)},[settings]);
+      const submit=async(e)=>{e.preventDefault();setBusy(true);setMessage('');try{await onSave({name,currency,timezone,fiscalYearStart:Number(fiscalYearStart)});setMessage('Pengaturan berhasil disimpan.')}catch(err){setMessage(err.message||'Pengaturan gagal disimpan.')}finally{setBusy(false)}};
+      return <section className="card p-5 sm:p-7 max-w-[760px] fade-up"><div className="mb-5"><h2 className="text-[15px] font-semibold">Preferensi keuangan</h2><p className="text-[11px] text-[#98a39d] mt-1">Perubahan akan diterapkan pada informasi dan tampilan keuanganmu.</p></div>
+        <form onSubmit={submit} className="space-y-4"><div><label className="label">Nama pengguna</label><input className="input" value={name} onChange={e=>setName(e.target.value)} maxLength="80" required/></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><div><label className="label">Format mata uang</label><select className="input" value={currency} onChange={e=>setCurrency(e.target.value)}>{['IDR','USD','EUR','GBP','SGD','AUD','JPY','MYR'].map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+          <div><label className="label">Zona waktu</label><select className="input" value={timezone} onChange={e=>setTimezone(e.target.value)}>{['Asia/Jakarta','Asia/Makassar','Asia/Jayapura','Asia/Singapore','Asia/Kuala_Lumpur','Asia/Tokyo','Europe/London','America/New_York','UTC'].map(z=><option key={z} value={z}>{z}</option>)}</select></div></div>
+          <div><label className="label">Awal tahun anggaran</label><select className="input" value={fiscalYearStart} onChange={e=>setFiscalYearStart(Number(e.target.value))}>{MONTHS.map((m,i)=><option key={m} value={i+1}>{m}</option>)}</select><p className="text-[10px] text-[#98a39d] mt-1">Pilih bulan pertama tahun anggaran.</p></div>
+          {message&&<div className="rounded-xl bg-[#f1f7f3] text-[#3b7d5d] text-[11px] p-3">{message}</div>}
+          <div className="flex justify-end"><button className="btn-primary" disabled={busy}>{busy?<span className="spinner"/>:<><Icon name="save"/> Simpan pengaturan</>}</button></div>
+        </form>
+      </section>;
+    }
+
+    function EmptyTransactions({onAdd}){
+      return <div className="card p-8 sm:p-12 text-center">
+        <div className="w-14 h-14 rounded-[18px] bg-[#edf5ef] text-[#4b8b6c] grid place-items-center mx-auto"><Icon name="receipt_long" className="!text-[27px]"/></div>
+        <h2 className="outfit text-[20px] font-semibold mt-4">Mulai dari satu catatan</h2>
+        <p className="text-[12px] text-[#8b9791] max-w-[350px] mx-auto mt-2 leading-relaxed">Tambahkan pemasukan atau pengeluaran pertamamu. Ringkasan bulanan akan terisi otomatis.</p>
+        <div className="flex flex-wrap justify-center gap-2 mt-5"><button className="btn-primary" onClick={()=>onAdd('expense')}><Icon name="north_east"/> Catat pengeluaran</button><button className="btn-secondary" onClick={()=>onAdd('income')}><Icon name="south_west"/> Catat pemasukan</button></div>
+      </div>;
+    }
+
+    function AuthView({onAuthenticated}){
+      const isStandalone = typeof google === 'undefined' || !google.script?.run;
+      const [mode,setMode]=useState('login');
+      const [apiUrl,setApiUrl]=useState(localStorage.getItem('ruanguang_api_url')||'');
+      const [username,setUsername]=useState('');
+      const [password,setPassword]=useState('');
+      const [busy,setBusy]=useState(false);
+      const [error,setError]=useState('');
+      const submit=async(e)=>{
+        e.preventDefault();
+        setError('');
+        if(isStandalone){
+          const endpoint=apiUrl.trim();
+          if(!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec\/?$/.test(endpoint)){
+            setError('Masukkan alamat layanan Apps Script yang berakhiran /exec.');
+            return;
+          }
+          localStorage.setItem('ruanguang_api_url',endpoint.replace(/\/$/,''));
+        }
+        setBusy(true);
+        try{
+          const method=mode==='register'?'registerUser':'loginUser';
+          const result=await serverCall(method,username.trim(),password);
+          if(!result?.success)throw new Error(result?.message||'Tidak dapat masuk.');
+          onAuthenticated(result.data.token);
+        }catch(err){
+          setError(err.message||'Tidak dapat masuk. Coba lagi.');
+        }finally{
+          setBusy(false);
+        }
+      };
+      return <main className="min-h-screen flex items-center justify-center p-5 bg-[#f5f7f5]">
+        <section className="card w-full max-w-[430px] p-6 sm:p-8 fade-up">
+          <div className="flex items-center gap-3 mb-7">
+            <div className="w-11 h-11 rounded-[14px] bg-[#176e59] text-white grid place-items-center"><Icon name="account_balance_wallet"/></div>
+            <div><div className="outfit text-[21px] font-bold tracking-[-.5px]">ruang<span className="text-[#167c65]">uang</span></div><div className="text-[10px] text-[#96a19c] tracking-[1.3px] uppercase mt-0.5">Personal finance</div></div>
+          </div>
+          <h1 className="outfit text-[25px] font-semibold tracking-[-.5px]">{mode==='login'?'Selamat datang kembali':'Buat akun RuangUang'}</h1>
+          <p className="text-[12px] text-[#89958f] mt-2">{mode==='login'?'Masuk untuk melihat catatan keuanganmu.':'Daftar untuk mulai mengelola keuangan secara pribadi.'}</p>
+          <form onSubmit={submit} className="space-y-4 mt-6">
+            {isStandalone&&<div><label className="label">Alamat layanan Apps Script</label><input className="input" type="url" value={apiUrl} onChange={e=>setApiUrl(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec" required/><p className="text-[10px] text-[#89958f] mt-1">Gunakan alamat aplikasi Apps Script yang sudah dipublikasikan.</p></div>}
+            <div><label className="label">Nama pengguna</label><input className="input" autoComplete="username" value={username} onChange={e=>setUsername(e.target.value)} placeholder="Contoh: nama_saya" maxLength="30" required/></div>
+            <div><label className="label">Kata sandi</label><input className="input" type="password" autoComplete={mode==='login'?'current-password':'new-password'} value={password} onChange={e=>setPassword(e.target.value)} placeholder={mode==='register'?'Minimal 8 karakter':'Masukkan kata sandi'} required minLength={mode==='register'?8:1}/></div>
+            {mode==='register'&&<p className="text-[10px] text-[#89958f] -mt-2">Nama pengguna: 3–30 karakter, huruf, angka, titik, garis bawah, atau tanda hubung.</p>}
+            {error&&<div className="rounded-xl bg-[#fff1ef] text-[#bd594c] text-[11px] p-3">{error}</div>}
+            <button className="btn-primary w-full !py-3" disabled={busy}>{busy?<span className="spinner"/>:<><Icon name={mode==='login'?'login':'person_add'}/>{mode==='login'?'Masuk':'Daftar'}</>}</button>
+          </form>
+          <div className="text-center text-[11px] text-[#89958f] mt-5">{mode==='login'?'Belum punya akun?':'Sudah punya akun?'} <button type="button" className="font-semibold text-[#167c65] hover:underline" onClick={()=>{setMode(mode==='login'?'register':'login');setError('')}}>{mode==='login'?'Daftar sekarang':'Masuk'}</button></div>
+          <div className="flex items-center justify-center gap-1.5 text-[10px] text-[#9aa59f] mt-6"><Icon name="lock" className="!text-[14px]"/> Data keuangan setiap akun tersimpan terpisah.</div>
+        </section>
+      </main>;
+    }
+
+    function App(){
+      const now=new Date();
+      const [view,setView]=useState('dashboard');
+      const [month,setMonth]=useState(now.getMonth()+1);
+      const [year,setYear]=useState(now.getFullYear());
+      const [periodMode,setPeriodMode]=useState('monthly');
+      const [selectedDate,setSelectedDate]=useState(now.toISOString().slice(0,10));
+      const [settings,setSettings]=useState({name:'Saya',currency:'IDR',timezone:'Asia/Jakarta',fiscalYearStart:1});
+      const [categories,setCategories]=useState([]);
+      const [accounts,setAccounts]=useState([]);
+      const [transactions,setTransactions]=useState([]);
+      const [dashboard,setDashboard]=useState(null);
+      const [initialLoading,setInitialLoading]=useState(true);
+      const [dashboardLoading,setDashboardLoading]=useState(false);
+      const [categoryLoading,setCategoryLoading]=useState(false);
+      const [modal,setModal]=useState(false);
+      const [modalType,setModalType]=useState('expense');
+      const [editTransaction,setEditTransaction]=useState(null);
+      const [menuOpen,setMenuOpen]=useState(false);
+      const [toast,setToast]=useState(null);
+      const [ready,setReady]=useState(false);
+      const [session,setSession]=useState(sessionToken);
+
+      useEffect(()=>{
+        if(!session){setInitialLoading(false);setReady(false);return}
+        let alive=true;
+        const load=async()=>{try{
+          const res=await serverCall('getInitialData');
+          if(!res?.success)throw new Error(res?.message||'Data belum dapat dimuat.');
+          if(!alive)return;
+          setSettings(res.data.settings||settings);
+          setCategories(res.data.categories||[]);
+          const accountRes=await serverCall('getAccounts');
+          if(!accountRes?.success)throw new Error(accountRes?.message||'Rekening gagal dimuat.');
+          setAccounts(accountRes.data.accounts||[]);
+          setTransactions(res.data.transactions||[]);
+          setDashboard(res.data.dashboard||null);
+          setReady(true);
+        }catch(err){if(alive)setToast({type:'error',message:err.message||'Gagal memuat data dari spreadsheet.'})}
+        finally{if(alive)setInitialLoading(false)}};
+        load();
+        return()=>{alive=false};
+      },[session]);
+
+      useEffect(()=>{
+        if(!ready)return;
+        let alive=true;
+        const load=async()=>{setDashboardLoading(true);try{
+          const res=await serverCall('getDashboard',month,year);
+          if(!res?.success)throw new Error(res?.message||'Ringkasan belum dapat diperbarui.');
+          if(alive)setDashboard(res.data);
+        }catch(err){if(alive)setToast({type:'error',message:err.message})}finally{if(alive)setDashboardLoading(false)}};
+        load();
+        return()=>{alive=false};
+      },[month,year,ready]);
+
+      const refreshCategories=async()=>{const r=await serverCall('getCategories');if(!r?.success)throw new Error(r?.message||'Kategori gagal dimuat.');setCategories(r.data.categories||[])};
+      const refreshAccounts=async()=>{const r=await serverCall('getAccounts');if(!r?.success)throw new Error(r?.message||'Rekening gagal dimuat.');setAccounts(r.data.accounts||[])};
+      const createAccount=async(payload)=>{const r=await serverCall('createAccount',payload);if(!r?.success)throw new Error(r?.message||'Rekening gagal ditambahkan.');await refreshAccounts();setToast({type:'success',message:'Rekening berhasil ditambahkan.'})};
+      const updateAccount=async(id,payload)=>{const r=await serverCall('updateAccount',id,payload);if(!r?.success)throw new Error(r?.message||'Rekening gagal diperbarui.');await refreshAccounts();setToast({type:'success',message:'Rekening berhasil diperbarui.'})};
+      const setPeriod=(m,y)=>{setMonth(m);setYear(y)};
+      const openAdd=(type='expense')=>{setEditTransaction(null);setModalType(type);setModal(true)};
+      const loadTransactions=async(filters={})=>{
+        const res=await serverCall('getTransactions',{...filters,month,year,date:filters.periodMode==='daily'?filters.date:'',limit:500});
+        if(!res?.success)throw new Error(res?.message||'Transaksi gagal dimuat.');
+        setTransactions(res.data.items||[]);
+      };
+      const saveTransaction=async(payload)=>{
+        const isEdit=Boolean(payload.id);
+        const res=isEdit?await serverCall('updateTransaction',payload.id,payload):await serverCall('createTransaction',payload);
+        if(!res?.success)throw new Error(res?.message||'Transaksi gagal disimpan.');
+        setDashboard(res.data.dashboard||dashboard);
+        const list=await serverCall('getTransactions',{month,year,limit:500,sortBy:'transactionDate',sortDirection:'desc'});
+        if(list?.success)setTransactions(list.data.items||[]);
+        setToast({type:'success',message:isEdit?'Transaksi berhasil diperbarui.':payload.type==='income'?'Pemasukan berhasil dicatat.':'Pengeluaran berhasil dicatat.'});
+      };
+      const removeTransaction=async(transaction)=>{
+        if(!window.confirm('Hapus transaksi ini? Tindakan ini tidak dapat dibatalkan.'))return;
+        const res=await serverCall('deleteTransaction',transaction.id);
+        if(!res?.success){setToast({type:'error',message:res?.message||'Transaksi gagal dihapus.'});return}
+        setDashboard(res.data.dashboard||dashboard);
+        const list=await serverCall('getTransactions',{month,year,limit:500,sortBy:'transactionDate',sortDirection:'desc'});
+        if(list?.success)setTransactions(list.data.items||[]);
+        setToast({type:'success',message:'Transaksi berhasil dihapus.'});
+      };
+      const updateCategory=async(id,payload)=>{
+        const res=await serverCall('updateCategory',id,payload);
+        if(!res?.success)throw new Error(res?.message||'Kategori gagal diperbarui.');
+        await refreshCategories();
+        setToast({type:'success',message:'Kategori berhasil diperbarui.'});
+      };
+      const saveSettings=async(payload)=>{
+        const res=await serverCall('updateUserSettings',payload);
+        if(!res?.success)throw new Error(res?.message||'Pengaturan gagal disimpan.');
+        setSettings(res.data.settings);
+        setToast({type:'success',message:'Pengaturan berhasil disimpan.'});
+      };
+      const createCategory=async(payload)=>{
+        const res=await serverCall('createCategory',payload);
+        if(!res?.success)throw new Error(res?.message||'Kategori gagal dibuat.');
+        await refreshCategories();
+        setToast({type:'success',message:'Kategori baru berhasil ditambahkan.'});
+      };
+      const handleAuthenticated=(token)=>{
+        sessionToken=token;
+        localStorage.setItem('ruanguang_session',token);
+        setInitialLoading(true);
+        setReady(false);
+        setSession(token);
+      };
+      const handleLogout=()=>{
+        sessionToken='';
+        localStorage.removeItem('ruanguang_session');
+        setReady(false);
+        setSession('');
+      };
+      const navigate=(id)=>{setView(id)};
+      if(!session)return <AuthView onAuthenticated={handleAuthenticated}/>;
+      return <div className="app-shell">
+        <Sidebar view={view} setView={navigate} open={menuOpen} onClose={()=>setMenuOpen(false)} onAdd={()=>openAdd()} onLogout={handleLogout}/>
+        <main className="main-area">
+          <Topbar view={view} month={month} year={year} setPeriod={setPeriod} onMenu={()=>setMenuOpen(true)} onAdd={()=>openAdd()} settings={settings}/>
+          <div className="px-6 lg:px-10 pb-10 mobile-pad">
+            {view==='dashboard'?<DashboardView dashboard={dashboard} transactions={transactions} currency={settings.currency||'IDR'} loading={initialLoading||dashboardLoading} onAdd={openAdd} month={month} year={year}/>:
+              view==='categories'?<CategoriesView categories={categories} onCreate={createCategory} onUpdate={updateCategory} loading={categoryLoading}/>:
+              view==='accounts'?<AccountsView accounts={accounts} loading={initialLoading} onCreate={createAccount} onUpdate={updateAccount} currency={settings.currency||'IDR'}/>:
+              view==='transactions'?<TransactionsView transactions={transactions} categories={categories} currency={settings.currency||'IDR'} loading={initialLoading} onLoad={loadTransactions} onEdit={t=>{setEditTransaction(t);setModalType(t.type);setModal(true)}} onDelete={removeTransaction} periodMode={periodMode} setPeriodMode={setPeriodMode} selectedDate={selectedDate} setSelectedDate={setSelectedDate}/>:
+              view==='audit'?<AuditLogsView/>:
+              view==='reports'?<ReportsView month={month} year={year} currency={settings.currency||'IDR'} periodMode={periodMode} setPeriodMode={setPeriodMode} selectedDate={selectedDate} setSelectedDate={setSelectedDate}/>:
+              view==='settings'?<SettingsView settings={settings} onSave={saveSettings}/>:
+              <EmptyTransactions onAdd={openAdd}/>}
+            <footer className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-[#a1aaa5] mt-7 px-1"><span>RuangUang · Catatan keuangan pribadi</span><span className="flex items-center gap-1"><Icon name="lock" className="!text-[13px]"/> Data tersimpan di spreadsheet milikmu</span></footer>
+          </div>
+        </main>
+        <TransactionModal open={modal} onClose={()=>{setModal(false);setEditTransaction(null)}} onSave={saveTransaction} categories={categories} accounts={accounts} defaultType={modalType} settings={settings} editTransaction={editTransaction}/>
+        <Toast toast={toast} onClose={()=>setToast(null)}/>
+      </div>;
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
